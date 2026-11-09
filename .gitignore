@@ -1,0 +1,6 @@
+/vendor/
+.env
+
+# 실제 DB 접속 정보와 계정 파일
+/public/inc/config.php
+/data/*계정정보*
