@@ -189,3 +189,19 @@ a.stat:hover{border-color:var(--navy-3)}
 .popup-head .btn-ghost:hover{background:rgba(255,255,255,.1)}
 .popup iframe{flex:1;width:100%;border:0;background:var(--bg)}
 body.bare .page{padding:18px}
+
+/* 유입 경로 (기본 / AX / AI / AWS) */
+.ch{display:inline-block;min-width:44px;text-align:center;padding:3px 9px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.ch-base{background:var(--mist);color:var(--ink-2)}
+.ch-ax{background:#E3F2FD;color:#0D5BA6}
+.ch-ai{background:#EDE7F6;color:#5B36A8}
+.ch-aws{background:#FFF1E0;color:#A85400}
+.channels{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-6px 0 18px}
+.channels-title{font-size:13px;font-weight:600;color:var(--ink-2);margin-right:2px}
+.chip-ch{display:inline-flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:7px 12px;text-decoration:none;color:var(--ink)}
+.chip-ch:hover{border-color:var(--navy-3)}
+.chip-ch.on{border-color:var(--navy);box-shadow:0 0 0 2px var(--navy) inset}
+.chip-ch b{font-size:16px;color:var(--navy);font-variant-numeric:tabular-nums}
+.chip-ch small{color:var(--ink-3)}
+.tbl td.w-rt{min-width:120px}
+.tbl td.w-ind{min-width:150px}

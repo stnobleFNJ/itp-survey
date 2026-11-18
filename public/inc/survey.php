@@ -1,5 +1,5 @@
 <?php
-// 설문 문항 정의: index.html 안의 DATA 를 그대로 읽어 씀 (설문을 고치면 관리자 화면도 자동으로 맞춰짐)
+// 설문 문항 정의: inc/survey_channel.html(index.html + 기수강생 보기) 안의 DATA 를 그대로 읽어 씀 (설문을 고치면 관리자 화면도 자동으로 맞춰짐)
 if (!defined('ITP_APP')) { http_response_code(403); exit; }
 
 function survey_def() {
@@ -7,7 +7,7 @@ function survey_def() {
     if ($def !== null) {
         return $def;
     }
-    $html = @file_get_contents(__DIR__ . '/../index.html');
+    $html = @file_get_contents(__DIR__ . '/survey_channel.html');
     $data = null;
     if ($html !== false && preg_match('/const DATA = (\{.*?\});\n/s', $html, $m)) {
         $data = json_decode($m[1], true);
@@ -58,7 +58,7 @@ function status_label($s) {
 }
 
 function rtype_label($v) {
-    $map = array(1 => '기업 대표응답자', 2 => '일반 재직자');
+    $map = array(1 => '기업 대표응답자', 2 => '일반 재직자', 3 => '인천 ICT IS 교육 기수강생');
     return isset($map[(int)$v]) ? $map[(int)$v] : '';
 }
 

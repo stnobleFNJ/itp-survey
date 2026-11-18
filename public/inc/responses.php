@@ -8,6 +8,7 @@ function result_sorts() {
         'completed' => array('제출 일시', 'completed_at'),
         'updated'   => array('최종 저장 일시', 'updated_at'),
         'status'    => array('완료 여부', 'status'),
+        'channel'   => array('유입 경로', "NULLIF(channel, '')"),
         'industry'  => array('분야', 'industry'),
         'rtype'     => array('응답자 유형', 'respondent_type'),
         'company'   => array('기업명', "NULLIF(company, '')"),
@@ -38,6 +39,7 @@ function result_filter($src) {
         'status'   => (string)g($src, 'status', ''),
         'industry' => (string)g($src, 'industry', ''),
         'rtype'    => (string)g($src, 'rtype', ''),
+        'channel'  => (string)g($src, 'channel', ''),
         'dfield'   => (string)g($src, 'dfield', 'started'),
         'from'     => (string)g($src, 'from', ''),
         'to'       => (string)g($src, 'to', ''),
@@ -47,7 +49,9 @@ function result_filter($src) {
     );
     if (!array_key_exists($f['status'], result_status_filters())) $f['status'] = '';
     if (!preg_match('/^(\d{1,3}|none)$/', $f['industry'])) $f['industry'] = '';
-    if (!in_array($f['rtype'], array('1', '2', 'none'), true)) $f['rtype'] = '';
+    if (!in_array($f['rtype'], array('1', '2', '3', 'none'), true)) $f['rtype'] = '';
+    // 유입 경로: base = 기본 주소, AX / AI / AWS
+    if ($f['channel'] !== 'base' && !in_array($f['channel'], array('AX', 'AI', 'AWS'), true)) $f['channel'] = '';
     if (!array_key_exists($f['dfield'], result_date_fields())) $f['dfield'] = 'started';
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['from'])) $f['from'] = '';
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['to'])) $f['to'] = '';
@@ -71,6 +75,12 @@ function result_sql($f) {
     } elseif ($f['industry'] !== '') {
         $w[] = 'industry = ?';
         $p[] = (int)$f['industry'];
+    }
+    if ($f['channel'] === 'base') {
+        $w[] = "channel = ''";
+    } elseif ($f['channel'] !== '') {
+        $w[] = 'channel = ?';
+        $p[] = $f['channel'];
     }
     if ($f['rtype'] === 'none') {
         $w[] = 'respondent_type IS NULL';

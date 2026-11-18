@@ -34,6 +34,17 @@
 - 미리보기(저장 안 됨): `?preview=done` (동의함), `?preview=done-no` (동의하지 않음).
 - `index.html` 의 DATA(JSON)를 고칠 때 줄바꿈은 `\n` 두 글자로 넣어야 함. 이 환경의 bash heredoc 은 `\\` 를 `\` 로 줄이므로, 수정 스크립트는 Write 로 파일을 만든 뒤 실행하고(`chr(92)+"n"` 사용) 저장 전에 `json.loads` 로 검증할 것.
 
+## 유입 경로별 설문 (/AX/ /AI/ /AWS/) — `ax3dir` 브랜치, cafe24 반영됨 (2026-11-18)
+- 기본 설문 `/itp/`(`index.html`)은 **변경하지 않음** (기수강생 보기 없음, 유입 경로는 빈값=기본).
+- `public/AX|AI|AWS/index.php` 가 `inc/survey_channel.html`(= index.html + A1 기수강생 보기 + CHANNEL 전송)을 읽어 `<base href="../">` 만 넣어 출력. `inc/` 는 .htaccess 로 직접 접근 차단(403).
+- 설문 공통 내용을 고칠 때는 `index.html` 과 `inc/survey_channel.html` **둘 다** 수정. 관리자 문항 표시(`inc/survey.php`)는 보기가 더 많은 `survey_channel.html` 을 읽음.
+- 운영 테이블 `itp_survey_response` 에 `channel` 칸 추가 완료.
+- 설문 JS 가 주소에서 `CHANNEL`(AX/AI/AWS, 기본은 빈값)을 읽어 응답에 `channel` 로 보냄. 서버는 없으면 Referer 로 판단, 목록 밖 값은 빈값(기본).
+- DB `channel` 칸: 새 테이블은 CREATE 에 포함, 예전 테이블은 `migrate_schema()` 가 ALTER 로 추가 (관리자 로그인 시 또는 응답 저장 중 1054 오류 시 자동).
+- A1 에 `3 = 인천 ICT IS 교육 기수강생` 추가. `isEm` 에 포함되어 일반 재직자와 같은 문항 경로(A8, C 영역)를 탐.
+- 관리자: 유입 경로 검색·정렬·목록 칸·경로별 응답 수(전체/완료) 칩, 상세·CSV 에 유입 경로 표시. 응답자 유형 검색에 기수강생 추가.
+- 로컬 시험은 `public/inc/config.local.php`(git 제외, 서버에 올리지 말 것)로 테이블 접두어를 `itpdev_` 로 바꿔 운영 테이블과 분리. 로컬 관리자도 `itpdev_admin` 의 `fnj / fnj1234`.
+
 ## 관리자 화면
 - 결과 목록: 완료 여부·분야·응답자 유형·기간·검색어 검색, 일자 포함 정렬, CSV 내려받기.
 - 성명 클릭 → 응답 내용 팝업(`view.php?id=N&popup=1`, 머리글 없는 화면). 번호 클릭 → 상세 화면.

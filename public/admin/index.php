@@ -17,7 +17,7 @@ $page = max(1, (int)g($_GET, 'page', 1));
 $total = (int)q1("SELECT COUNT(*) AS n FROM $tbl $where", $params)['n'];
 $pages = max(1, (int)ceil($total / $per));
 $page = min($page, $pages);
-$rows = q("SELECT id, submission_id, status, respondent_type, company, name, phone, industry, current_q,
+$rows = q("SELECT id, submission_id, status, channel, respondent_type, company, name, phone, industry, current_q,
                   answered_count, route_count, ip, started_at, updated_at, completed_at
            FROM $tbl $where $order LIMIT " . (($page - 1) * $per) . ", $per", $params);
 
@@ -26,6 +26,14 @@ $sum = array('all' => 0, 'complete' => 0, 'progress' => 0, 'out' => 0);
 foreach (q("SELECT status, COUNT(*) AS n FROM $tbl GROUP BY status") as $r) {
     $sum[$r['status']] = (int)$r['n'];
     $sum['all'] += (int)$r['n'];
+}
+// 유입 경로별 응답 수 (전체 / 제출 완료)
+$byChannel = array();
+foreach (channel_list() as $k => $v) {
+    $byChannel[$k] = array('all' => 0, 'complete' => 0);
+}
+foreach (q("SELECT channel, COUNT(*) AS n, SUM(status = 'complete') AS c FROM $tbl GROUP BY channel") as $r) {
+    $byChannel[$r['channel']] = array('all' => (int)$r['n'], 'complete' => (int)$r['c']);
 }
 $today = (int)q1("SELECT COUNT(*) AS n FROM $tbl WHERE completed_at >= ?", array(date('Y-m-d 00:00:00')))['n'];
 
@@ -61,12 +69,30 @@ admin_header('설문조사 결과', 'results');
   <div class="stat"><span>오늘 제출</span><b><?= number_format($today) ?></b></div>
 </section>
 
+<section class="channels" aria-label="유입 경로별 응답">
+  <span class="channels-title">유입 경로별</span>
+  <?php foreach ($byChannel as $k => $c):
+      $key = $k === '' ? 'base' : $k; ?>
+  <a class="chip-ch<?= $f['channel'] === $key ? ' on' : '' ?>" href="<?= h(result_url('index.php', $fq, array('channel' => $f['channel'] === $key ? '' : $key, 'page' => ''))) ?>">
+    <span class="ch ch-<?= h(strtolower($key)) ?>"><?= h(channel_label($k)) ?></span>
+    <b><?= number_format($c['all']) ?></b><small>완료 <?= number_format($c['complete']) ?></small>
+  </a>
+  <?php endforeach; ?>
+</section>
+
 <form class="filter" method="get" action="index.php">
   <div class="filter-grid">
     <label class="fld"><span>설문 완료 여부</span>
       <select name="status">
         <?php foreach (result_status_filters() as $k => $v): ?>
         <option value="<?= h($k) ?>"<?= $f['status'] === $k ? ' selected' : '' ?>><?= h($v) ?></option>
+        <?php endforeach; ?>
+      </select></label>
+    <label class="fld"><span>유입 경로</span>
+      <select name="channel">
+        <option value="">전체</option>
+        <?php foreach (channel_list() as $k => $v): $key = $k === '' ? 'base' : $k; ?>
+        <option value="<?= h($key) ?>"<?= $f['channel'] === $key ? ' selected' : '' ?>><?= h($k === '' ? '기본 (/itp/)' : $v . ' (/' . $k . '/)') ?></option>
         <?php endforeach; ?>
       </select></label>
     <label class="fld"><span>분야 (주요 산업)</span>
@@ -82,6 +108,7 @@ admin_header('설문조사 결과', 'results');
         <option value="">전체</option>
         <option value="1"<?= $f['rtype'] === '1' ? ' selected' : '' ?>>기업 대표응답자</option>
         <option value="2"<?= $f['rtype'] === '2' ? ' selected' : '' ?>>일반 재직자</option>
+        <option value="3"<?= $f['rtype'] === '3' ? ' selected' : '' ?>>인천 ICT IS 교육 기수강생</option>
         <option value="none"<?= $f['rtype'] === 'none' ? ' selected' : '' ?>>(미응답)</option>
       </select></label>
     <div class="fld fld-date"><span>기간</span>
@@ -133,6 +160,7 @@ admin_header('설문조사 결과', 'results');
   <thead><tr>
     <?= sort_th('id', '번호', $f, $per) ?>
     <?= sort_th('status', '완료 여부', $f, $per) ?>
+    <?= sort_th('channel', '유입 경로', $f, $per) ?>
     <?= sort_th('rtype', '응답자 유형', $f, $per) ?>
     <?= sort_th('company', '기업명', $f, $per) ?>
     <?= sort_th('name', '성명', $f, $per) ?>
@@ -146,7 +174,7 @@ admin_header('설문조사 결과', 'results');
   </tr></thead>
   <tbody>
   <?php if (!$rows): ?>
-    <tr><td colspan="12" class="empty">조건에 맞는 응답이 없습니다.</td></tr>
+    <tr><td colspan="13" class="empty">조건에 맞는 응답이 없습니다.</td></tr>
   <?php endif; ?>
   <?php foreach ($rows as $r):
       $url = 'view.php?id=' . (int)$r['id'] . '&back=' . rawurlencode(result_url('index.php', $fq, array('page' => $page > 1 ? $page : '')));
@@ -154,11 +182,12 @@ admin_header('설문조사 결과', 'results');
     <tr>
       <td class="num"><a href="<?= h($url) ?>"><?= (int)$r['id'] ?></a></td>
       <td><span class="badge badge-<?= h($r['status']) ?>"><?= h(status_label($r['status'])) ?></span></td>
-      <td><?= h(rtype_label($r['respondent_type'])) ?></td>
+      <td><span class="ch ch-<?= h($r['channel'] === '' ? 'base' : strtolower($r['channel'])) ?>"><?= h(channel_label($r['channel'])) ?></span></td>
+      <td class="w-rt"><?= h(rtype_label($r['respondent_type'])) ?></td>
       <td class="strong co"><a href="<?= h($url) ?>"><?= $r['company'] !== '' ? h($r['company']) : '<span class="muted">(미기재)</span>' ?></a></td>
       <td class="nowrap"><a class="name-pop" href="<?= h($url) ?>" data-pop="view.php?id=<?= (int)$r['id'] ?>&amp;popup=1" title="설문 내용 팝업으로 보기"><?= $r['name'] !== '' ? h($r['name']) : '<span class="muted">(미기재)</span>' ?></a></td>
       <td class="nowrap"><?= h($r['phone']) ?></td>
-      <td><?= $r['industry'] !== null ? h(g($industries, (int)$r['industry'], $r['industry'])) : '' ?></td>
+      <td class="w-ind"><?= $r['industry'] !== null ? h(g($industries, (int)$r['industry'], $r['industry'])) : '' ?></td>
       <td class="nowrap" title="<?= (int)$r['answered_count'] ?> / <?= (int)$r['route_count'] ?> 문항<?= $r['status'] !== 'complete' && $r['current_q'] !== '' ? ' · 마지막 문항 ' . h($r['current_q']) : '' ?>">
         <span class="bar"><i style="width:<?= $pct ?>%"></i></span> <?= $pct ?>%</td>
       <td class="mono"><?= h($r['ip']) ?></td>

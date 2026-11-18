@@ -61,11 +61,21 @@ foreach ($routeIds as $id) {
     }
 }
 
+// 유입 경로: 설문 주소 /AX/ /AI/ /AWS/ 에 따라 브라우저가 보내 줌. 없으면 Referer 주소로 판단
+$channel = strtoupper((string)g($d, 'channel', ''));
+if ($channel === '' && preg_match('#/(AX|AI|AWS)(/|$|\?)#i', server_str('HTTP_REFERER', 500), $m)) {
+    $channel = strtoupper($m[1]);
+}
+if (!array_key_exists($channel, channel_list())) {
+    $channel = '';
+}
+
 $now = now();
 $ip = client_ip();
 $row = array(
     'status'          => $status,
     'survey_version'  => cut(g($d, 'surveyVersion', ''), 30),
+    'channel'         => $channel,
     'respondent_type' => intv(av($answers, 'A1')),
     'consent'         => intv(av($answers, 'P1')),
     'company'         => cut(g($p2, 'company', ''), 100),
@@ -138,7 +148,7 @@ try {
         $result = save_response($sid, $row, $status, $ip, $now);
     } catch (mysqli_sql_exception $e) {
         $code = (int)$e->getCode();
-        if ($code === 1146) {          // 테이블 없음 → 만들고 다시 시도
+        if ($code === 1146 || $code === 1054) {   // 테이블 없음 / 새 칸(channel) 없음 → 만들고 다시 시도
             ensure_schema();
         } elseif ($code !== 1062) {    // 1062 = 같은 응답이 동시에 두 번 들어옴 → 다시 시도하면 수정으로 처리됨
             throw $e;

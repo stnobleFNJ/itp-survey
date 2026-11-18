@@ -68,6 +68,7 @@ admin_header('응답 #' . $r['id'], 'results', $popup);
 <section class="card">
   <h2>응답 정보</h2>
   <dl class="meta">
+    <div><dt>유입 경로</dt><dd><span class="ch ch-<?= h($r['channel'] === '' ? 'base' : strtolower($r['channel'])) ?>"><?= h(channel_label($r['channel'])) ?></span> <small class="muted"><?= $r['channel'] === '' ? '/itp/' : '/' . h($r['channel']) . '/' ?></small></dd></div>
     <div><dt>응답자 유형</dt><dd><?= h(rtype_label($r['respondent_type'])) ?: '-' ?></dd></div>
     <div><dt>기업명</dt><dd><?= h($r['company']) ?: '-' ?></dd></div>
     <div><dt>성명</dt><dd><?= h($r['name']) ?: '-' ?><?= $r['gender'] !== '' ? ' (' . h($r['gender']) . ')' : '' ?></dd></div>
@@ -84,7 +85,7 @@ admin_header('응답 #' . $r['id'], 'results', $popup);
     <div><dt>IP</dt><dd class="mono"><?= h($r['ip']) ?><?= $r['last_ip'] !== $r['ip'] ? ' → ' . h($r['last_ip']) . ' <small class="muted">(마지막 저장)</small>' : '' ?></dd></div>
     <?php if ($r['forwarded_for'] !== ''): ?><div><dt>X-Forwarded-For</dt><dd class="mono"><?= h($r['forwarded_for']) ?></dd></div><?php endif; ?>
     <div class="wide"><dt>브라우저</dt><dd class="small"><?= h($r['user_agent']) ?: '-' ?></dd></div>
-    <div class="wide"><dt>유입 경로</dt><dd class="small"><?= h($r['referer']) ?: '-' ?></dd></div>
+    <div class="wide"><dt>참조 주소</dt><dd class="small"><?= h($r['referer']) ?: '-' ?></dd></div>
     <div class="wide"><dt>응답 고유번호</dt><dd class="mono small"><?= h($r['submission_id']) ?> · 설문 버전 <?= h($r['survey_version']) ?></dd></div>
   </dl>
 </section>

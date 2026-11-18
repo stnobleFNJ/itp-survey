@@ -115,7 +115,7 @@ function admin_header($title, $active = '', $bare = false) {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/admin.css?v=3">
+<link rel="stylesheet" href="assets/admin.css?v=5">
 </head>
 <body<?= $bare ? ' class="bare"' : '' ?>>
 <?php if (!$bare): ?>

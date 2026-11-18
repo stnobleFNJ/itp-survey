@@ -14,6 +14,10 @@ if (!is_file(__DIR__ . '/config.php')) {
     exit('inc/config.php 파일이 없습니다. inc/config.sample.php 를 복사해서 만들어 주세요.');
 }
 $GLOBALS['ITP_CFG'] = require __DIR__ . '/config.php';
+// 로컬 시험용 덮어쓰기 (서버에 올리지 않음, git 제외). 예: 시험 전용 테이블 접두어
+if (is_file(__DIR__ . '/config.local.php')) {
+    $GLOBALS['ITP_CFG'] = array_merge($GLOBALS['ITP_CFG'], require __DIR__ . '/config.local.php');
+}
 
 function cfg($key, $default = null) {
     return array_key_exists($key, $GLOBALS['ITP_CFG']) ? $GLOBALS['ITP_CFG'][$key] : $default;
@@ -137,7 +141,8 @@ function ensure_schema() {
         submission_id VARCHAR(64) NOT NULL COMMENT '응답 고유번호(브라우저 생성)',
         status VARCHAR(10) NOT NULL DEFAULT 'progress' COMMENT 'progress=작성중, out=대상외 종료, complete=제출완료',
         survey_version VARCHAR(30) NOT NULL DEFAULT '',
-        respondent_type TINYINT NULL COMMENT 'A1: 1=기업 대표응답자, 2=일반 재직자',
+        channel VARCHAR(10) NOT NULL DEFAULT '' COMMENT '유입 경로: 빈값=기본, AX, AI, AWS',
+        respondent_type TINYINT NULL COMMENT 'A1: 1=기업 대표응답자, 2=일반 재직자, 3=인천 ICT IS 교육 기수강생',
         consent TINYINT NULL COMMENT 'P1: 1=동의, 2=비동의',
         company VARCHAR(100) NOT NULL DEFAULT '',
         name VARCHAR(50) NOT NULL DEFAULT '',
@@ -167,11 +172,13 @@ function ensure_schema() {
         PRIMARY KEY (id),
         UNIQUE KEY uk_submission (submission_id),
         KEY ix_status (status),
+        KEY ix_channel (channel),
         KEY ix_industry (industry),
         KEY ix_started (started_at),
         KEY ix_completed (completed_at),
         KEY ix_ip (ip)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='2026 인천 ICT 수요조사 응답'");
+    migrate_schema();
 
     db()->query("CREATE TABLE IF NOT EXISTS `" . T('admin') . "` (
         id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -199,4 +206,22 @@ function ensure_schema() {
             array(cfg('default_admin_id', 'fnj'), password_hash(cfg('default_admin_pw', 'fnj1234'), PASSWORD_DEFAULT),
                 '최고 관리자', 'super', 'system', now(), now()));
     }
+}
+
+/** 예전에 만들어진 테이블에 새 칸 추가 (유입 경로 channel) */
+function migrate_schema() {
+    $tbl = '`' . T('survey_response') . '`';
+    if (!q("SHOW COLUMNS FROM $tbl LIKE 'channel'")) {
+        db()->query("ALTER TABLE $tbl ADD COLUMN channel VARCHAR(10) NOT NULL DEFAULT '' COMMENT '유입 경로: 빈값=기본, AX, AI, AWS' AFTER survey_version, ADD KEY ix_channel (channel)");
+    }
+}
+
+/** 유입 경로 코드 => 표시 이름 (빈값 = 기본 주소 /itp/) */
+function channel_list() {
+    return array('' => '기본', 'AX' => 'AX', 'AI' => 'AI', 'AWS' => 'AWS');
+}
+
+function channel_label($c) {
+    $l = channel_list();
+    return isset($l[(string)$c]) ? $l[(string)$c] : (string)$c;
 }
