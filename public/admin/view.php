@@ -10,16 +10,19 @@ if (!preg_match('/^index\.php(\?[^\s<>"]*)?$/', $back)) {
     $back = 'index.php';
 }
 
-// 응답 삭제 (최고 관리자만): 시험 응답 정리용
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && g($_POST, 'action') === 'delete') {
+// 응답 삭제 처리 / 복구: DB 에서 지우지 않고 deleted_at 만 표시 (목록·통계·CSV 에서 빠짐)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
-    if (!is_super()) {
-        http_response_code(403);
-        exit('권한이 없습니다.');
+    $act = g($_POST, 'action');
+    if ($act === 'soft_delete') {
+        q("UPDATE $tbl SET deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL", array(now(), $me['username'], $id));
+        flash($id . '번 응답을 삭제 처리했습니다. ([삭제된 응답]에서 복구할 수 있습니다)');
+        redirect($back);
+    } elseif ($act === 'restore') {
+        q("UPDATE $tbl SET deleted_at = NULL, deleted_by = '' WHERE id = ?", array($id));
+        flash($id . '번 응답을 복구했습니다.');
+        redirect('view.php?id=' . $id . '&back=' . rawurlencode($back));
     }
-    q("DELETE FROM $tbl WHERE id = ?", array($id));
-    flash($id . '번 응답을 삭제했습니다.');
-    redirect($back);
 }
 
 $r = q1("SELECT * FROM $tbl WHERE id = ?", array($id));
@@ -52,10 +55,18 @@ admin_header('응답 #' . $r['id'], 'results', $popup);
     <a class="btn btn-ghost" href="view.php?id=<?= (int)$r['id'] ?>" target="_blank" rel="noopener">새 창에서 열기 ↗</a>
     <?php else: ?>
     <a class="btn btn-ghost" href="<?= h($back) ?>">목록으로</a>
-    <?php if (is_super()): ?>
-    <form method="post" onsubmit="return confirm('이 응답을 삭제할까요? 되돌릴 수 없습니다.')">
+    <?php if ($r['deleted_at']): ?>
+    <form method="post" onsubmit="return confirm('이 응답을 복구할까요?')">
       <?= csrf_field() ?>
-      <input type="hidden" name="action" value="delete">
+      <input type="hidden" name="action" value="restore">
+      <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+      <input type="hidden" name="back" value="<?= h($back) ?>">
+      <button type="submit" class="btn btn-primary">응답 복구</button>
+    </form>
+    <?php else: ?>
+    <form method="post" onsubmit="return confirm('이 응답을 삭제 처리할까요?\n(DB 에서 지워지지 않으며 [삭제된 응답]에서 복구할 수 있습니다)')">
+      <?= csrf_field() ?>
+      <input type="hidden" name="action" value="soft_delete">
       <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
       <input type="hidden" name="back" value="<?= h($back) ?>">
       <button type="submit" class="btn btn-danger">응답 삭제</button>
@@ -64,20 +75,23 @@ admin_header('응답 #' . $r['id'], 'results', $popup);
     <?php endif; ?>
   </div>
 </div>
+<?php if ($r['deleted_at']): ?>
+<p class="del-note">삭제 처리된 응답입니다 · <?= h($r['deleted_at']) ?> · 처리자 <?= h($r['deleted_by']) ?: '-' ?> <small>(목록·통계·CSV 에서 제외됨)</small></p>
+<?php endif; ?>
 
 <section class="card">
   <h2>응답 정보</h2>
   <dl class="meta">
     <div><dt>유입 경로</dt><dd><span class="ch ch-<?= h($r['channel'] === '' ? 'base' : strtolower($r['channel'])) ?>"><?= h(channel_label($r['channel'])) ?></span> <small class="muted"><?= $r['channel'] === '' ? '/itp/' : '/' . h($r['channel']) . '/' ?></small></dd></div>
     <div><dt>응답자 유형</dt><dd><?= h(rtype_label($r['respondent_type'])) ?: '-' ?></dd></div>
-    <div><dt>기업명</dt><dd><?= h($r['company']) ?: '-' ?></dd></div>
-    <div><dt>성명</dt><dd><?= h($r['name']) ?: '-' ?><?= $r['gender'] !== '' ? ' (' . h($r['gender']) . ')' : '' ?></dd></div>
+    <div><dt>기업명</dt><dd><?= $r['company'] !== '' ? h($r['company']) : blank_label($r, '-') ?></dd></div>
+    <div><dt>성명</dt><dd><?= $r['name'] !== '' ? h($r['name']) : blank_label($r, '-') ?><?= $r['gender'] !== '' ? ' (' . h($r['gender']) . ')' : '' ?></dd></div>
     <div><dt>직위</dt><dd><?= h($r['position']) ?: '-' ?></dd></div>
     <div><dt>연락처</dt><dd><?= h($r['phone']) ?: '-' ?></dd></div>
     <div><dt>이메일</dt><dd><?= h($r['email']) ?: '-' ?></dd></div>
     <div><dt>분야</dt><dd><?= $r['industry'] !== null ? h(g($industries, (int)$r['industry'], $r['industry'])) : '-' ?></dd></div>
     <div><dt>개인정보 동의</dt><dd><?= $r['consent'] === null ? '-' : ((int)$r['consent'] === 1 ? '동의' : '동의하지 않음') ?></dd></div>
-    <div><dt>진행</dt><dd><?= (int)$r['answered_count'] ?> / <?= (int)$r['route_count'] ?> 문항<?= $r['status'] !== 'complete' && $r['current_q'] !== '' ? ' · 마지막 문항 ' . h($r['current_q']) : '' ?></dd></div>
+    <div><dt>진행</dt><dd><?= progress_pct($r) ?>% <small class="muted">(응답 <?= (int)$r['answered_count'] ?> / <?= (int)$r['route_count'] ?> 문항)</small><?= $r['status'] !== 'complete' && $r['current_q'] !== '' ? ' · 마지막 문항 ' . h($r['current_q']) : '' ?></dd></div>
     <div><dt>시작 일시</dt><dd><?= h($r['started_at']) ?></dd></div>
     <div><dt>제출 일시</dt><dd><?= h($r['completed_at']) ?: '-' ?></dd></div>
     <div><dt>최종 저장</dt><dd><?= h($r['updated_at']) ?> <small class="muted">(저장 <?= (int)$r['save_count'] ?>회)</small></dd></div>

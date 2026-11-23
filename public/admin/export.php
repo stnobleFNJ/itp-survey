@@ -27,8 +27,8 @@ header("Content-Disposition: attachment; filename=\"itp_survey_" . date('Ymd_His
 $out = fopen('php://output', 'w');
 fwrite($out, "\xEF\xBB\xBF");
 
-$head = array('번호', '완료 여부', '유입 경로', '응답자 유형', '기업명', '성명', '성별', '직위', '연락처', '이메일', '분야',
-    '진행(응답/경로)', '마지막 문항', 'IP', '마지막 저장 IP', '시작 일시', '제출 일시', '최종 저장 일시', '브라우저', '응답 고유번호');
+$head = array('번호', '완료 여부', '유입 경로', '응답자 유형', '기업명', '성명', '성별', '직위', '연락처', '이메일', '개인정보 동의', '분야',
+    '진행률', '응답 문항(응답/경로)', '마지막 문항', 'IP', '마지막 저장 IP', '시작 일시', '제출 일시', '최종 저장 일시', '브라우저', '응답 고유번호');
 foreach ($def['q'] as $qid => $q) {
     $head[] = $qid . ' ' . $q['title'];
 }
@@ -39,9 +39,9 @@ foreach ($rows as $r) {
     $answers = is_array($answers) ? $answers : array();
     $line = array(
         $r['id'], status_label($r['status']), channel_label($r['channel']), rtype_label($r['respondent_type']),
-        cell($r['company']), cell($r['name']), cell($r['gender']), cell($r['position']), cell($r['phone']), cell($r['email']),
+        cell($r['company']), cell($r['name']), cell($r['gender']), cell($r['position']), cell($r['phone']), cell($r['email']), consent_label($r['consent']),
         $r['industry'] !== null ? g($industries, (int)$r['industry'], $r['industry']) : '',
-        $r['answered_count'] . '/' . $r['route_count'], $r['current_q'],
+        progress_pct($r) . '%', $r['answered_count'] . '/' . $r['route_count'], $r['current_q'],
         $r['ip'], $r['last_ip'], $r['started_at'], $r['completed_at'], $r['updated_at'], cell($r['user_agent']), $r['submission_id'],
     );
     foreach ($def['q'] as $qid => $q) {

@@ -65,7 +65,7 @@ small{font-size:12px}
 .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:22px;margin-bottom:18px}
 
 /* 요약 */
-.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:18px}
 .stat{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:2px}
 a.stat:hover{border-color:var(--navy-3)}
 .stat span{font-size:13px;color:var(--ink-2)}
@@ -106,7 +106,8 @@ a.stat:hover{border-color:var(--navy-3)}
 .tbl th .arr{color:var(--navy-3);font-size:10px}
 .tbl tbody tr:hover{background:#FAFBFE}
 .tbl tr.sel{background:#FFF9E6}
-.tbl td.num{font-variant-numeric:tabular-nums}
+.tbl td.num{font-variant-numeric:tabular-nums;white-space:nowrap;min-width:64px}
+.tbl th.chk + th{min-width:64px;white-space:nowrap}
 .tbl td.co{min-width:150px}
 .tbl td.mono{white-space:nowrap}
 .tbl td.strong a,.tbl td.strong{font-weight:600;color:var(--navy);text-decoration:none}
@@ -205,3 +206,18 @@ body.bare .page{padding:18px}
 .chip-ch small{color:var(--ink-3)}
 .tbl td.w-rt{min-width:120px}
 .tbl td.w-ind{min-width:150px}
+
+/* 삭제 처리(복구 가능) */
+.tbl th.chk,.tbl td.chk{width:34px;text-align:center;padding-left:8px;padding-right:4px}
+.tbl td.chk input,.tbl th.chk input{width:16px;height:16px;cursor:pointer}
+.tbl tr.row-del td{background:#FBF3F2;color:#8a8f9c}
+.del-by{color:var(--err);font-size:11.5px;white-space:nowrap}
+.del-note{background:var(--err-bg);color:var(--err);border-radius:10px;padding:10px 14px;margin:0 0 14px;font-size:14px}
+.del-note a{color:var(--err);font-weight:600;margin-left:6px}
+.bulk-actions{display:flex;gap:6px;margin-left:auto;margin-right:10px}
+.stat-del span{color:var(--err)}
+.stat-del.on{border-color:var(--err)}
+
+/* 인적 사항 빈칸 구분: 미동의(개인정보 동의 안 함) / 미기재(입력 안 함) */
+.tag-nocon{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;color:#9A3412;background:#FFEDD5;border:1px solid #FDBA74;white-space:nowrap}
+.tag-blank{color:#9aa1b0;font-size:12.5px;font-style:italic;white-space:nowrap}

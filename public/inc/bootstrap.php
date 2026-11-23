@@ -169,6 +169,8 @@ function ensure_schema() {
         started_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,
         completed_at DATETIME NULL,
+        deleted_at DATETIME NULL COMMENT '관리자 삭제 처리 일시(NULL=정상)',
+        deleted_by VARCHAR(30) NOT NULL DEFAULT '' COMMENT '삭제 처리한 관리자',
         PRIMARY KEY (id),
         UNIQUE KEY uk_submission (submission_id),
         KEY ix_status (status),
@@ -176,7 +178,8 @@ function ensure_schema() {
         KEY ix_industry (industry),
         KEY ix_started (started_at),
         KEY ix_completed (completed_at),
-        KEY ix_ip (ip)
+        KEY ix_ip (ip),
+        KEY ix_deleted (deleted_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='2026 인천 ICT 수요조사 응답'");
     migrate_schema();
 
@@ -213,6 +216,10 @@ function migrate_schema() {
     $tbl = '`' . T('survey_response') . '`';
     if (!q("SHOW COLUMNS FROM $tbl LIKE 'channel'")) {
         db()->query("ALTER TABLE $tbl ADD COLUMN channel VARCHAR(10) NOT NULL DEFAULT '' COMMENT '유입 경로: 빈값=기본, AX, AI, AWS' AFTER survey_version, ADD KEY ix_channel (channel)");
+    }
+    // 관리자 삭제 처리(실제 삭제 아님) 칸
+    if (!q("SHOW COLUMNS FROM $tbl LIKE 'deleted_at'")) {
+        db()->query("ALTER TABLE $tbl ADD COLUMN deleted_at DATETIME NULL COMMENT '관리자 삭제 처리 일시(NULL=정상)' AFTER completed_at, ADD COLUMN deleted_by VARCHAR(30) NOT NULL DEFAULT '' COMMENT '삭제 처리한 관리자' AFTER deleted_at, ADD KEY ix_deleted (deleted_at)");
     }
 }
 

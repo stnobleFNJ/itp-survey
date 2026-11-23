@@ -13,7 +13,7 @@ function result_sorts() {
         'rtype'     => array('응답자 유형', 'respondent_type'),
         'company'   => array('기업명', "NULLIF(company, '')"),
         'name'      => array('성명', "NULLIF(name, '')"),
-        'progress'  => array('진행률', 'answered_count / GREATEST(route_count, 1)'),
+        'progress'  => array('진행률', "IF(status = 'complete', 1, LEAST(answered_count / GREATEST(route_count, 1), 0.99))"),
         'ip'        => array('IP', 'ip'),
         'id'        => array('번호', 'id'),
     );
@@ -40,6 +40,7 @@ function result_filter($src) {
         'industry' => (string)g($src, 'industry', ''),
         'rtype'    => (string)g($src, 'rtype', ''),
         'channel'  => (string)g($src, 'channel', ''),
+        'del'      => (string)g($src, 'del', '') === '1' ? '1' : '',   // 1 = 삭제 처리된 응답 보기
         'dfield'   => (string)g($src, 'dfield', 'started'),
         'from'     => (string)g($src, 'from', ''),
         'to'       => (string)g($src, 'to', ''),
@@ -64,6 +65,8 @@ function result_filter($src) {
 function result_sql($f) {
     $w = array();
     $p = array();
+    // 삭제 처리된 응답은 기본 목록·CSV 에서 제외, '삭제된 응답' 보기에서만 표시
+    $w[] = $f['del'] === '1' ? 'deleted_at IS NOT NULL' : 'deleted_at IS NULL';
     if ($f['status'] === 'incomplete') {
         $w[] = "status <> 'complete'";
     } elseif ($f['status'] !== '') {

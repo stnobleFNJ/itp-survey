@@ -115,7 +115,7 @@ function admin_header($title, $active = '', $bare = false) {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/admin.css?v=5">
+<link rel="stylesheet" href="assets/admin.css?v=8">
 </head>
 <body<?= $bare ? ' class="bare"' : '' ?>>
 <?php if (!$bare): ?>
@@ -159,4 +159,25 @@ function admin_footer($bare = false) {
 </body>
 </html>
 <?php
+}
+
+/** 진행률(%): 완료 화면까지 간 응답(제출 완료)은 선택 문항을 건너뛰었어도 100%, 미완료는 최대 99% */
+function progress_pct($r) {
+    if ($r['status'] === 'complete') return 100;
+    $pct = $r['route_count'] > 0 ? (int)round($r['answered_count'] / $r['route_count'] * 100) : 0;
+    return min(99, $pct);
+}
+
+/** 개인정보 동의 여부 문구 */
+function consent_label($c) {
+    if ($c === null || $c === '') return '';
+    return (int)$c === 1 ? '동의' : '미동의';
+}
+
+/** 기업명·성명이 비어 있을 때 표시: 개인정보 미동의는 '(미동의)', 그 밖은 '(미기재)' */
+function blank_label($r, $other = '(미기재)') {
+    if (isset($r['consent']) && $r['consent'] !== null && (int)$r['consent'] === 2) {
+        return '<span class="tag-nocon" title="개인정보 수집·이용에 동의하지 않아 인적 사항을 받지 않음">미동의</span>';
+    }
+    return $other === '-' ? '-' : '<span class="tag-blank" title="동의했지만 아직 입력하지 않음(작성 중 등)">' . h($other) . '</span>';
 }

@@ -4,6 +4,35 @@ require __DIR__ . '/../inc/responses.php';
 $me = require_login();
 
 $tbl = '`' . T('survey_response') . '`';
+
+// 선택한 응답 삭제 처리 / 복구 (DB 에서 지우지 않고 deleted_at 만 표시)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_check();
+    $back = (string)g($_POST, 'back', 'index.php');
+    if (!preg_match('/^index\.php(\?[^\s<>"]*)?$/', $back)) {
+        $back = 'index.php';
+    }
+    $ids = array();
+    foreach ((array)g($_POST, 'ids', array()) as $v) {
+        if ((int)$v > 0) $ids[] = (int)$v;
+    }
+    $ids = array_values(array_unique($ids));
+    $act = (string)g($_POST, 'action');
+    if (!$ids) {
+        flash('선택한 응답이 없습니다.', 'err');
+    } elseif ($act === 'soft_delete' || $act === 'restore') {
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        if ($act === 'soft_delete') {
+            q("UPDATE $tbl SET deleted_at = ?, deleted_by = ? WHERE deleted_at IS NULL AND id IN ($in)", array_merge(array(now(), $me['username']), $ids));
+            flash(count($ids) . '건을 삭제 처리했습니다. ([삭제된 응답]에서 복구할 수 있습니다)');
+        } else {
+            q("UPDATE $tbl SET deleted_at = NULL, deleted_by = '' WHERE deleted_at IS NOT NULL AND id IN ($in)", $ids);
+            flash(count($ids) . '건을 복구했습니다.');
+        }
+    }
+    redirect($back);
+}
+
 $f = result_filter($_GET);
 list($where, $params, $order) = result_sql($f);
 
@@ -17,13 +46,13 @@ $page = max(1, (int)g($_GET, 'page', 1));
 $total = (int)q1("SELECT COUNT(*) AS n FROM $tbl $where", $params)['n'];
 $pages = max(1, (int)ceil($total / $per));
 $page = min($page, $pages);
-$rows = q("SELECT id, submission_id, status, channel, respondent_type, company, name, phone, industry, current_q,
-                  answered_count, route_count, ip, started_at, updated_at, completed_at
+$rows = q("SELECT id, submission_id, status, channel, respondent_type, consent, company, name, phone, industry, current_q,
+                  answered_count, route_count, ip, started_at, updated_at, completed_at, deleted_at, deleted_by
            FROM $tbl $where $order LIMIT " . (($page - 1) * $per) . ", $per", $params);
 
 // 상단 요약 (검색 조건과 관계없이 전체 기준)
 $sum = array('all' => 0, 'complete' => 0, 'progress' => 0, 'out' => 0);
-foreach (q("SELECT status, COUNT(*) AS n FROM $tbl GROUP BY status") as $r) {
+foreach (q("SELECT status, COUNT(*) AS n FROM $tbl WHERE deleted_at IS NULL GROUP BY status") as $r) {
     $sum[$r['status']] = (int)$r['n'];
     $sum['all'] += (int)$r['n'];
 }
@@ -32,10 +61,11 @@ $byChannel = array();
 foreach (channel_list() as $k => $v) {
     $byChannel[$k] = array('all' => 0, 'complete' => 0);
 }
-foreach (q("SELECT channel, COUNT(*) AS n, SUM(status = 'complete') AS c FROM $tbl GROUP BY channel") as $r) {
+foreach (q("SELECT channel, COUNT(*) AS n, SUM(status = 'complete') AS c FROM $tbl WHERE deleted_at IS NULL GROUP BY channel") as $r) {
     $byChannel[$r['channel']] = array('all' => (int)$r['n'], 'complete' => (int)$r['c']);
 }
-$today = (int)q1("SELECT COUNT(*) AS n FROM $tbl WHERE completed_at >= ?", array(date('Y-m-d 00:00:00')))['n'];
+$deletedCount = (int)q1("SELECT COUNT(*) AS n FROM $tbl WHERE deleted_at IS NOT NULL")['n'];
+$today = (int)q1("SELECT COUNT(*) AS n FROM $tbl WHERE deleted_at IS NULL AND completed_at >= ?", array(date('Y-m-d 00:00:00')))['n'];
 
 $industries = survey_options('A6');
 $sorts = result_sorts();
@@ -67,6 +97,7 @@ admin_header('설문조사 결과', 'results');
   <a class="stat" href="index.php?status=progress"><span>작성 중</span><b><?= number_format($sum['progress']) ?></b></a>
   <a class="stat" href="index.php?status=out"><span>대상외 종료</span><b><?= number_format($sum['out']) ?></b></a>
   <div class="stat"><span>오늘 제출</span><b><?= number_format($today) ?></b></div>
+  <a class="stat stat-del<?= $f['del'] === '1' ? ' on' : '' ?>" href="index.php?del=1"><span>삭제된 응답</span><b><?= number_format($deletedCount) ?></b></a>
 </section>
 
 <section class="channels" aria-label="유입 경로별 응답">
@@ -144,8 +175,23 @@ admin_header('설문조사 결과', 'results');
   </div>
 </form>
 
+<?php if ($f['del'] === '1'): ?>
+<p class="del-note">삭제 처리된 응답만 보고 있습니다. 통계·CSV 기본 목록에는 포함되지 않으며, 선택해서 복구할 수 있습니다. <a href="index.php">정상 응답 목록으로</a></p>
+<?php endif; ?>
+<?php $backUrl = result_url('index.php', $fq, array('page' => $page > 1 ? $page : '')); ?>
+<form id="bulk" method="post" action="index.php" onsubmit="return bulkCheck(this, event)">
+  <?= csrf_field() ?>
+  <input type="hidden" name="back" value="<?= h($backUrl) ?>">
+</form>
 <div class="list-head">
   <p>검색 결과 <b><?= number_format($total) ?></b>건 · <?= h($sorts[$f['sort']][0]) ?> <?= $f['dir'] === 'asc' ? '오름차순' : '내림차순' ?></p>
+  <div class="bulk-actions">
+    <?php if ($f['del'] === '1'): ?>
+    <button type="submit" form="bulk" name="action" value="restore" class="btn btn-ghost btn-sm">선택 복구</button>
+    <?php else: ?>
+    <button type="submit" form="bulk" name="action" value="soft_delete" class="btn btn-danger btn-sm">선택 삭제</button>
+    <?php endif; ?>
+  </div>
   <form method="get" action="index.php" class="per">
     <?php foreach ($f as $k => $v): if ($v === '') continue; ?><input type="hidden" name="<?= h($k) ?>" value="<?= h($v) ?>"><?php endforeach; ?>
     <label>한 화면에
@@ -158,6 +204,7 @@ admin_header('설문조사 결과', 'results');
 <div class="table-wrap">
 <table class="tbl">
   <thead><tr>
+    <th class="chk"><input type="checkbox" id="chkAll" aria-label="이 화면 전체 선택"></th>
     <?= sort_th('id', '번호', $f, $per) ?>
     <?= sort_th('status', '완료 여부', $f, $per) ?>
     <?= sort_th('channel', '유입 경로', $f, $per) ?>
@@ -174,18 +221,19 @@ admin_header('설문조사 결과', 'results');
   </tr></thead>
   <tbody>
   <?php if (!$rows): ?>
-    <tr><td colspan="13" class="empty">조건에 맞는 응답이 없습니다.</td></tr>
+    <tr><td colspan="14" class="empty">조건에 맞는 응답이 없습니다.</td></tr>
   <?php endif; ?>
   <?php foreach ($rows as $r):
       $url = 'view.php?id=' . (int)$r['id'] . '&back=' . rawurlencode(result_url('index.php', $fq, array('page' => $page > 1 ? $page : '')));
-      $pct = $r['route_count'] > 0 ? round($r['answered_count'] / $r['route_count'] * 100) : 0; ?>
-    <tr>
+      $pct = progress_pct($r); ?>
+    <tr<?= $r['deleted_at'] ? ' class="row-del"' : '' ?>>
+      <td class="chk"><input type="checkbox" name="ids[]" value="<?= (int)$r['id'] ?>" form="bulk" aria-label="<?= (int)$r['id'] ?>번 선택"></td>
       <td class="num"><a href="<?= h($url) ?>"><?= (int)$r['id'] ?></a></td>
-      <td><span class="badge badge-<?= h($r['status']) ?>"><?= h(status_label($r['status'])) ?></span></td>
+      <td><span class="badge badge-<?= h($r['status']) ?>"><?= h(status_label($r['status'])) ?></span><?php if ($r['deleted_at']): ?><br><small class="del-by" title="<?= h($r['deleted_at']) ?>">삭제 <?= h(fmt_dt($r['deleted_at'])) ?> · <?= h($r['deleted_by']) ?></small><?php endif; ?></td>
       <td><span class="ch ch-<?= h($r['channel'] === '' ? 'base' : strtolower($r['channel'])) ?>"><?= h(channel_label($r['channel'])) ?></span></td>
       <td class="w-rt"><?= h(rtype_label($r['respondent_type'])) ?></td>
-      <td class="strong co"><a href="<?= h($url) ?>"><?= $r['company'] !== '' ? h($r['company']) : '<span class="muted">(미기재)</span>' ?></a></td>
-      <td class="nowrap"><a class="name-pop" href="<?= h($url) ?>" data-pop="view.php?id=<?= (int)$r['id'] ?>&amp;popup=1" title="설문 내용 팝업으로 보기"><?= $r['name'] !== '' ? h($r['name']) : '<span class="muted">(미기재)</span>' ?></a></td>
+      <td class="strong co"><a href="<?= h($url) ?>"><?= $r['company'] !== '' ? h($r['company']) : blank_label($r) ?></a></td>
+      <td class="nowrap"><a class="name-pop" href="<?= h($url) ?>" data-pop="view.php?id=<?= (int)$r['id'] ?>&amp;popup=1" title="설문 내용 팝업으로 보기"><?= $r['name'] !== '' ? h($r['name']) : blank_label($r) ?></a></td>
       <td class="nowrap"><?= h($r['phone']) ?></td>
       <td class="w-ind"><?= $r['industry'] !== null ? h(g($industries, (int)$r['industry'], $r['industry'])) : '' ?></td>
       <td class="nowrap" title="<?= (int)$r['answered_count'] ?> / <?= (int)$r['route_count'] ?> 문항<?= $r['status'] !== 'complete' && $r['current_q'] !== '' ? ' · 마지막 문항 ' . h($r['current_q']) : '' ?>">
@@ -222,6 +270,19 @@ admin_header('설문조사 결과', 'results');
   <iframe id="popupFrame" title="설문 내용" src="about:blank"></iframe>
 </dialog>
 <script>
+function bulkCheck(form, ev) {
+  var n = document.querySelectorAll('input[name="ids[]"]:checked').length;
+  var b = (ev && ev.submitter) || document.activeElement, act = b && b.value;
+  if (!n) { alert('삭제(복구)할 응답을 선택해 주세요.'); return false; }
+  return confirm(act === 'restore' ? n + '건을 복구할까요?' : n + '건을 삭제 처리할까요?\n(DB 에서 지워지지 않으며 [삭제된 응답]에서 복구할 수 있습니다)');
+}
+(function () {
+  var all = document.getElementById('chkAll');
+  if (all) all.addEventListener('change', function () {
+    var c = document.querySelectorAll('input[name="ids[]"]');
+    for (var i = 0; i < c.length; i++) c[i].checked = all.checked;
+  });
+})();
 (function () {
   var dlg = document.getElementById('popup'), frame = document.getElementById('popupFrame');
   document.addEventListener('click', function (e) {

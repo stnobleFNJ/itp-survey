@@ -56,6 +56,17 @@ button{cursor:pointer}
 .btn-start{background:var(--yellow);color:var(--navy);border:0;border-radius:14px;padding:16px 34px;font-size:19px;font-weight:700}
 .btn-start:hover{background:#FFD65C}
 .resume{margin-top:14px;font-size:15px;color:var(--on-navy)}
+.resume-dlg{position:fixed;inset:0;z-index:60;background:rgba(9,16,36,.62);display:flex;align-items:center;justify-content:center;padding:16px}
+.resume-box{background:var(--paper);color:var(--ink);border-radius:var(--r-card);width:100%;max-width:420px;padding:28px 24px 22px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.resume-box h2{margin:0 0 8px;font-size:21px;line-height:1.35}
+.resume-box p{margin:0;color:#4A5570;font-size:15.5px}
+.resume-info{list-style:none;margin:16px 0 0;padding:12px 14px;background:var(--mist);border-radius:12px;font-size:14.5px}
+.resume-info li{display:flex;gap:12px;padding:3px 0}
+.resume-info b{min-width:72px;color:#4A5570;font-weight:600}
+.resume-actions{display:flex;gap:10px;margin-top:20px}
+.resume-actions button{flex:1;padding:14px 10px;border-radius:var(--r-opt);font-size:16px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.resume-actions .go{background:var(--yellow);border-color:var(--yellow);color:var(--navy)}
+.resume-actions .go:hover{background:var(--yellow-deep)}
 .resume button{background:none;border:0;color:var(--yellow);text-decoration:underline;padding:0;font-weight:600}
 
 /* 문항 카드 */
@@ -236,7 +247,7 @@ function fmtTel(v){
 }
 const val = (x,a) => typeof x==="function" ? x(a) : x;
 const newSid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(16).slice(2));
-const save = () => { if(!sid && (view==="q"||view==="out")) sid=newSid(); try{ sessionStorage.setItem(KEY, JSON.stringify({A,cur,view,sid})); }catch(e){} queueSync(); };
+const save = () => { if(!sid && (view==="q"||view==="out")) sid=newSid(); const v = JSON.stringify({A,cur,view,sid,t:Date.now()}); try{ localStorage.setItem(KEY, v); }catch(e){ try{ sessionStorage.setItem(KEY, v); }catch(e2){} } queueSync(); };
 /* 진행 중 응답 자동 저장: 관리자 화면에서 미완료 응답도 확인할 수 있도록 서버에 보냄 */
 let syncT = null;
 function queueSync(){ if(!CONFIG.submitUrl || (view!=="q" && view!=="out")) return; clearTimeout(syncT); syncT = setTimeout(syncNow, 1200); }
@@ -244,7 +255,13 @@ function syncNow(){ syncT = null; if(!CONFIG.submitUrl || (view!=="q" && view!==
   try{ const d = Object.assign(payload(), {status: view==="out" ? "out" : "progress", current: cur});
     fetch(CONFIG.submitUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(d),keepalive:true}).catch(()=>{}); }catch(e){} }
 window.addEventListener("pagehide", ()=>{ if(syncT){ clearTimeout(syncT); syncNow(); } });
-const load = () => { try{ return JSON.parse(sessionStorage.getItem(KEY)||"null"); }catch(e){ return null; } };
+const DRAFT_DAYS = 30;
+const clearDraft = () => { try{ localStorage.removeItem(KEY); }catch(e){} try{ sessionStorage.removeItem(KEY); }catch(e){} };
+const load = () => { let d = null;
+  try{ d = JSON.parse(localStorage.getItem(KEY)||"null"); }catch(e){}
+  if(!d){ try{ d = JSON.parse(sessionStorage.getItem(KEY)||"null"); }catch(e){} }
+  if(d && d.t && Date.now()-d.t > DRAFT_DAYS*864e5){ clearDraft(); return null; }
+  return d; };
 const route = () => Q.filter(q => !q.show || q.show(A));
 const estRoute = () => { EST=true; try{ return route(); } finally{ EST=false; } };
 const displayNo = q => q.id;
@@ -297,10 +314,47 @@ function renderIntro(){
     el("div",{class:"rule"}),
     DATA.INTRO.map(t=>el("p",{text:t})),
     el("ul",{class:"facts"}, facts.map(f=>el("li",{}, el("b",{text:f[0]}), el("span",{text:f[1]})))),
-    el("button",{type:"button",class:"btn-start",onclick:()=>{ A={}; sid=null; start(); },text:"설문 시작"}),
-    (saved && saved.view==="q" && saved.cur) ? el("p",{class:"resume"},"작성하던 응답이 있습니다. ", el("button",{type:"button",onclick:()=>{ A=saved.A||{}; sid=saved.sid; cur=saved.cur; if(!route().some(q=>q.id===cur)) cur=route()[0].id; dir=1; renderQ(); },text:"이어서 작성"})) : null
+    el("button",{type:"button",class:"btn-start",onclick:()=>{ closeResume(); A={}; sid=null; start(); },text:"설문 시작"}),
+    hasDraft(saved) ? el("p",{class:"resume"},"작성하던 응답이 있습니다. ", el("button",{type:"button",onclick:()=>resumeDraft(saved),text:"이어서 작성"})) : null
   );
   dir=1; show(n,{});
+  if(hasDraft(saved)) checkDraft(saved);
+}
+/* 중간에 그만둔 응답: 다시 들어오면 이어서 할지 확인 */
+const hasDraft = d => !!(d && d.view==="q" && d.cur && d.A && Object.keys(d.A).length);
+/* 관리자가 삭제 처리한 응답·이미 제출된 응답은 이어서 하지 않음 */
+function dropDraft(){ clearDraft(); closeResume(); const x=document.querySelector(".resume"); if(x) x.remove(); }
+function checkDraft(d){
+  if(!CONFIG.submitUrl || !/submit\.php$/.test(CONFIG.submitUrl) || !d.sid){ askResume(d); return; }
+  const link=document.querySelector(".resume"); if(link) link.hidden=true;
+  fetch(resumeUrl(),{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"check",sid:d.sid})})
+    .then(r=>r.json()).then(r=>{
+      if(view!=="intro") return;
+      if(r && (r.state==="deleted" || r.state==="complete")){ dropDraft(); return; }
+      if(link) link.hidden=false; askResume(d);
+    })
+    .catch(()=>{ if(view!=="intro") return; if(link) link.hidden=false; askResume(d); });
+}
+function resumeDraft(d){ closeResume(); A=d.A||{}; sid=d.sid; cur=d.cur; if(!route().some(q=>q.id===cur)) cur=route()[0].id; dir=1; renderQ(); }
+function closeResume(){ const x=$("#resumeDlg"); if(x) x.remove(); }
+function askResume(d){
+  closeResume();
+  const keepA = A; A = d.A||{}; const r = route(); let i = r.findIndex(q=>q.id===d.cur); A = keepA;
+  if(i<0) i=0;
+  const pct = Math.round(i / Math.max(r.length,1) * 100);
+  const when = d.t ? (()=>{ const t=new Date(d.t), p=x=>String(x).padStart(2,"0"); return (t.getMonth()+1)+"월 "+t.getDate()+"일 "+p(t.getHours())+":"+p(t.getMinutes()); })() : "";
+  const goBtn = el("button",{type:"button",class:"go",onclick:()=>resumeDraft(d),text:"이어서 하기"});
+  const box = el("div",{class:"resume-dlg",id:"resumeDlg",role:"dialog","aria-modal":"true","aria-labelledby":"resumeTitle"},
+    el("div",{class:"resume-box"},
+      el("h2",{id:"resumeTitle",text:"작성하던 설문이 있습니다"}),
+      el("p",{text:"이전에 작성하던 응답을 이어서 하시겠습니까?"}),
+      el("ul",{class:"resume-info"},
+        el("li",{}, el("b",{text:"진행"}), el("span",{text:(i+1)+"번째 문항 ("+d.cur+") · 약 "+pct+"%"})),
+        when ? el("li",{}, el("b",{text:"마지막 저장"}), el("span",{text:when})) : null),
+      el("div",{class:"resume-actions"},
+        el("button",{type:"button",class:"new",onclick:()=>{ if(confirm("처음부터 다시 시작할까요?\n작성하던 응답은 이어서 할 수 없게 됩니다.")){ clearDraft(); closeResume(); renderIntro(); } },text:"처음부터 다시"}),
+        goBtn)));
+  document.body.append(box); goBtn.focus();
 }
 function start(){ cur = route()[0].id; dir=1; renderQ(); }
 
@@ -473,9 +527,55 @@ const BUILD = {
 };
 
 /* ===== 이동 ===== */
+/* 휴대전화 번호 + 성명으로 서버에 남아 있는 작성 중 설문 찾기 (브라우저 임시 저장이 없어도 이어서 하기) */
+let phoneChecked = "";
+const resumeUrl = () => CONFIG.submitUrl.replace(/submit\.php$/, "resume.php");
+function phoneCheck(){
+  if(!CONFIG.submitUrl || !/submit\.php$/.test(CONFIG.submitUrl)) return false;
+  const p2 = A.P2||{}, tel = String(p2.phone||"").replace(/\D/g,""), nm = String(p2.name||"").trim();
+  if(tel.length<10 || !nm) return false;
+  const key = tel+"|"+nm; if(phoneChecked===key) return false;
+  phoneChecked = key;
+  const btn = $("#btnNext"); btn.disabled = true;
+  try{
+  clearTimeout(syncT);
+  const goOn = () => { btn.disabled = false; save(); next(); };
+  fetch(resumeUrl(),{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({action:"find",phone:tel,name:nm,channel:(typeof CHANNEL!=="undefined" ? CHANNEL : ""),submissionId:sid||""})})
+    .then(r=>r.json()).then(d=>{ if(d && d.found && d.answers){ btn.disabled = false; try{ askServerResume(d, tel, nm); }catch(e){ closeResume(); goOn(); } } else goOn(); })
+    .catch(goOn);
+  }catch(e){ btn.disabled = false; return false; }
+  return true;
+}
+function askServerResume(d, tel, nm){
+  closeResume();
+  const goBtn = el("button",{type:"button",class:"go",text:"이어서 하기",onclick:()=>{
+    const oldSid = sid, keepP1 = A.P1, keepP2 = A.P2;
+    A = d.answers || {}; A.P1 = keepP1; A.P2 = Object.assign({}, A.P2||{}, keepP2);
+    sid = d.sid; cur = d.current;
+    if(!route().some(q=>q.id===cur)) cur = route()[0].id;
+    closeResume(); dir=1; renderQ(); save();
+    if(oldSid && oldSid!==sid){
+      fetch(resumeUrl(),{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+        body:JSON.stringify({action:"merge",from:oldSid,to:sid,phone:tel,name:nm})}).catch(()=>{});
+    }
+  }});
+  const box = el("div",{class:"resume-dlg",id:"resumeDlg",role:"dialog","aria-modal":"true","aria-labelledby":"resumeTitle"},
+    el("div",{class:"resume-box"},
+      el("h2",{id:"resumeTitle",text:"작성하던 설문이 있습니다"}),
+      el("p",{text:"입력하신 휴대전화 번호로 작성하다 멈춘 설문이 있습니다. 이어서 하시겠습니까?"}),
+      el("ul",{class:"resume-info"},
+        el("li",{}, el("b",{text:"진행"}), el("span",{text:(d.total ? d.answered+" / "+d.total+" 문항 응답" : d.answered+"개 문항 응답")+(d.current ? " ("+d.current+"까지)" : "")})),
+        d.updated ? el("li",{}, el("b",{text:"마지막 저장"}), el("span",{text:d.updated})) : null),
+      el("div",{class:"resume-actions"},
+        el("button",{type:"button",class:"new",text:"새로 작성",onclick:()=>{ closeResume(); save(); next(); }}),
+        goBtn)));
+  document.body.append(box); goBtn.focus();
+}
 function next(){
   const q = Q.find(x=>x.id===cur);
   if(!answered(q) && mustAnswer(q)){ setMsg(q.type==="form" ? "필수 항목(기업명·성명·연락처)을 적어 주세요. 적고 싶지 않으면 이전 화면에서 ‘동의하지 않음’을 고르면 됩니다." : q.type==="matrix"||q.type==="pair"||q.type==="lmatrix" ? "모든 줄에서 하나씩 골라 주세요." : "이 문항은 다음 문항을 정하는 데 필요합니다. 하나를 골라 주세요."); return; }
+  if(q.id==="P2" && phoneCheck()) return;
   if(q.id==="A2" && A.A2 && A.A2.v===2){ dir=1; renderOut(); return; }
   const r = route(), idx = r.findIndex(x=>x.id===cur);
   if(idx===r.length-1){ submit(); return; }
@@ -531,7 +631,7 @@ function doneSection(consent, phone){
     gift);
 }
 function renderDone(data, preview){
-  view="done"; try{ sessionStorage.removeItem(KEY); }catch(e){}
+  view="done"; clearDraft();
   const n = doneSection(!!(A.P1 && A.P1.v===1), String((A.P2 && A.P2.phone) || "").trim());
   if(preview){ n.append(el("div",{class:"preview"}, "미리보기 상태입니다. 응답을 받을 주소가 설정되지 않아 이 응답은 저장되지 않았습니다.",
     el("br"), el("button",{type:"button",onclick:()=>{ const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}); const a=el("a",{href:URL.createObjectURL(blob),download:"응답_미리보기.json"}); document.body.append(a); a.click(); a.remove(); },text:"이 응답을 파일로 내려받기"}))); }
