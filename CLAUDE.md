@@ -42,7 +42,7 @@
 - 기본 설문 `/itp/`(`index.html`)은 **변경하지 않음** (기수강생 보기 없음, 유입 경로는 빈값=기본).
 - `public/AX|AI|AWS/index.php` 가 `inc/survey_channel.html`(= index.html + A1 기수강생 보기 + CHANNEL 전송)을 읽어 `<base href="../">` 만 넣어 출력. `inc/` 는 .htaccess 로 직접 접근 차단(403).
 - 설문 공통 내용을 고칠 때는 `index.html` 과 `inc/survey_channel.html` **둘 다** 수정. 관리자 문항 표시(`inc/survey.php`)는 보기가 더 많은 `survey_channel.html` 을 읽음.
-- 운영 테이블 `itp_survey_response` 에 `channel` 칸 추가 완료.
+- 운영 테이블 `itp_survey_response` 에 `channel` 칸 추가 완료. 삭제 처리 칸(`deleted_at`, `deleted_by`)도 추가 완료 (2026-11-23, itp-dev 시험 후 `/itp/` 반영).
 - 설문 JS 가 주소에서 `CHANNEL`(AX/AI/AWS, 기본은 빈값)을 읽어 응답에 `channel` 로 보냄. 서버는 없으면 Referer 로 판단, 목록 밖 값은 빈값(기본).
 - DB `channel` 칸: 새 테이블은 CREATE 에 포함, 예전 테이블은 `migrate_schema()` 가 ALTER 로 추가 (관리자 로그인 시 또는 응답 저장 중 1054 오류 시 자동).
 - A1 에 `3 = 인천 ICT IS 교육 기수강생` 추가. `isEm` 에 포함되어 일반 재직자와 같은 문항 경로(A8, C 영역)를 탐.
